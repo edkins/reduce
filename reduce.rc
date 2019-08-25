@@ -1,0 +1,7 @@
+menubar MENU
+{
+	POPUP "&File"
+	{
+		MENUITEM "&Open", 101
+	}
+}

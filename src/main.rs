@@ -1,3 +1,5 @@
+mod open;
+
 use std::iter::once;
 use std::mem::uninitialized;
 use std::ptr::null_mut;
@@ -8,19 +10,39 @@ use winapi::um::winuser::{
     CS_OWNDC,CS_HREDRAW,CS_VREDRAW,WNDCLASSW,
     CW_USEDEFAULT,
     MSG,
-    WM_DESTROY,
+    WM_COMMAND,WM_DESTROY,
     WS_OVERLAPPEDWINDOW,WS_VISIBLE,
     CreateWindowExW,DefWindowProcW,DispatchMessageW,GetMessageW,PostQuitMessage,RegisterClassW,TranslateMessage};
 use winapi::um::libloaderapi::GetModuleHandleW;
 
-fn win32_string(value : &str) -> Vec<u16> {
+use crate::open::show_file_open_dialog;
+
+pub fn win32_string(value : &str) -> Vec<u16> {
     value.chars().map(|c|c as u16).chain( once( 0 ) ).collect()
+}
+
+pub fn from_win32_string(value: &[u16]) -> Option<String> {
+    let mut result = String::new();
+    for ch in value {
+        if *ch == 0 {
+            return Some(result);
+        }
+        result.push(std::char::from_u32(*ch as u32)?);
+    }
+    Some(result)
 }
 
 struct WndClass {
     hinstance: HMODULE,
     _atom: ATOM,
     name: Vec<u16>
+}
+
+const FILE_OPEN:usize = 101;
+
+fn file_open(hwnd: HWND) {
+    let filename = show_file_open_dialog(hwnd);
+    println!("Filename: {:?}", filename);
 }
 
 unsafe extern "system" fn window_proc(
@@ -33,15 +55,22 @@ unsafe extern "system" fn window_proc(
     match msg {
         WM_DESTROY => {
             PostQuitMessage(0);
-            0
         }
-        _ => DefWindowProcW(hwnd, msg, wparam, lparam)
+        WM_COMMAND => {
+            match wparam & 0xffff {
+                FILE_OPEN => file_open(hwnd),
+                _ => println!("WM_COMMAND. wparam low word = {}", wparam & 0xffff)
+            }
+        }
+        _ => {}
     }
+    DefWindowProcW(hwnd, msg, wparam, lparam)
 }
 
 impl WndClass {
-    fn new(name: &str) -> Self {
+    fn new(name: &str, menu_name: &str) -> Self {
         let name = win32_string(name);
+        let menu_name = win32_string(menu_name);
 
         let atom;
         let hinstance;
@@ -58,7 +87,7 @@ impl WndClass {
                 hIcon: null_mut(),
                 hCursor: null_mut(),
                 hbrBackground: null_mut(),
-                lpszMenuName: null_mut(),
+                lpszMenuName: menu_name.as_ptr()
             };
 
             atom = RegisterClassW(&wnd_class);
@@ -110,7 +139,7 @@ impl Window {
 }
 
 fn main() {
-    let class = WndClass::new("reduce");
+    let class = WndClass::new("reduce","menubar");
     let window = Window::new(&class, "Reduce Images");
     window.event_loop();
 }
