@@ -1,0 +1,1 @@
+wine target/x86_64-pc-windows-gnu/debug/reduce.exe
