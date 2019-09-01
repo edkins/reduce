@@ -7,16 +7,18 @@ use std::iter::once;
 use std::mem::uninitialized;
 use std::ptr::null_mut;
 
-use winapi::shared::minwindef::{ATOM,HMODULE,UINT,WPARAM,LPARAM};
-use winapi::shared::windef::{HWND};
+use winapi::shared::minwindef::{ATOM,HMODULE,UINT,WPARAM,LPARAM,TRUE};
+use winapi::shared::windef::{HWND,HBRUSH,RECT};
 use winapi::um::winuser::{
+    COLOR_WINDOW,
     CS_OWNDC,CS_HREDRAW,CS_VREDRAW,WNDCLASSW,
     CW_USEDEFAULT,
     MSG,
     SC_CLOSE,
     WM_COMMAND,WM_SYSCOMMAND,WM_PAINT,
     WS_OVERLAPPEDWINDOW,WS_VISIBLE,
-    CreateWindowExW,DefWindowProcW,DispatchMessageW,GetDC,GetMessageW,InvalidateRect,
+    CreateWindowExW,DefWindowProcW,DispatchMessageW,FillRect,
+    GetDC,GetMessageW,GetClientRect,InvalidateRect,
     PostQuitMessage,RegisterClassW,TranslateMessage,
 };
 use winapi::um::libloaderapi::GetModuleHandleW;
@@ -50,13 +52,12 @@ const FILE_OPEN:usize = 101;
 
 fn file_open(state: &mut State, hwnd: HWND) {
     let filename = show_file_open_dialog(hwnd);
-    println!("Filename: {:?}", filename);
     if filename.is_some() {
         let image_res = Image::load(&filename.unwrap());
         if image_res.is_ok() {
             state.image = image_res.unwrap();
             unsafe {
-                InvalidateRect(hwnd, null_mut(), 1);
+                InvalidateRect(hwnd, null_mut(), TRUE);
             }
         } else {
             println!("{:?}", image_res.unwrap_err());
@@ -87,8 +88,10 @@ unsafe fn window_proc(
         }
         WM_PAINT => {
             let dc = GetDC(hwnd);
+            let mut rect = RECT{left:0, top:0, right: 0, bottom: 0};
+            GetClientRect(hwnd, &mut rect);
+            FillRect(dc, &rect, (COLOR_WINDOW+1) as HBRUSH);
             state.image.paint_to_dc(dc);
-            println!("paint");
         }
         _ => {}
     }

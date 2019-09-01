@@ -34,9 +34,25 @@ impl Image {
         Image{width,height,stride,data}
     }
     fn new_from_data(width: u64, height: u64, color_type: ColorType, data: Vec<u8>) -> Result<Self,Er> {
-        println!("{:?}", color_type);
-        let stride = 3 * width as usize;
+        let stride = (((3 * width) / 12 + 11) * 12) as usize;
         match color_type {
+            ColorType::RGB(8) => {
+                let dstride = 3 * width as usize;
+                let mut rgb = vec![0; stride * height as usize];
+                for y in 0..height as usize {
+                    for x in 0..width as usize {
+                        rgb[stride*(height as usize-y-1)+3*x+2] = data[dstride*y+3*x];
+                        rgb[stride*(height as usize-y-1)+3*x+1] = data[dstride*y+3*x+1];
+                        rgb[stride*(height as usize-y-1)+3*x+0] = data[dstride*y+3*x+2];
+                    }
+                }
+                Ok(Image{
+                    width,
+                    height,
+                    stride: stride as u64,
+                    data: rgb
+                })
+            }
             ColorType::RGBA(8) => {
                 let dstride = 4 * width as usize;
                 let mut rgb = vec![0; stride * height as usize];
@@ -83,7 +99,7 @@ impl Image {
         let bmi = BITMAPINFO {
             bmiHeader: BITMAPINFOHEADER{
                 biSize: size_of::<BITMAPINFOHEADER>() as DWORD,
-                biWidth: self.width as LONG,
+                biWidth: (self.stride/3) as LONG,
                 biHeight: self.height as LONG,
                 biPlanes: 1,
                 biBitCount: 24,
