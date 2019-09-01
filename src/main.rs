@@ -1,3 +1,4 @@
+mod error;
 mod image;
 mod open;
 mod state;
@@ -6,18 +7,21 @@ use std::iter::once;
 use std::mem::uninitialized;
 use std::ptr::null_mut;
 
-use winapi::shared::minwindef::{ATOM,HMODULE,UINT,WPARAM,LPARAM,LRESULT};
+use winapi::shared::minwindef::{ATOM,HMODULE,UINT,WPARAM,LPARAM};
 use winapi::shared::windef::{HWND};
 use winapi::um::winuser::{
     CS_OWNDC,CS_HREDRAW,CS_VREDRAW,WNDCLASSW,
     CW_USEDEFAULT,
     MSG,
     SC_CLOSE,
-    WM_COMMAND,WM_SYSCOMMAND,
+    WM_COMMAND,WM_SYSCOMMAND,WM_PAINT,
     WS_OVERLAPPEDWINDOW,WS_VISIBLE,
-    CreateWindowExW,DefWindowProcW,DispatchMessageW,GetMessageW,PostQuitMessage,RegisterClassW,TranslateMessage};
+    CreateWindowExW,DefWindowProcW,DispatchMessageW,GetDC,GetMessageW,InvalidateRect,
+    PostQuitMessage,RegisterClassW,TranslateMessage,
+};
 use winapi::um::libloaderapi::GetModuleHandleW;
 
+use crate::image::Image;
 use crate::open::show_file_open_dialog;
 use crate::state::State;
 
@@ -44,9 +48,20 @@ struct WndClass {
 
 const FILE_OPEN:usize = 101;
 
-fn file_open(hwnd: HWND) {
+fn file_open(state: &mut State, hwnd: HWND) {
     let filename = show_file_open_dialog(hwnd);
     println!("Filename: {:?}", filename);
+    if filename.is_some() {
+        let image_res = Image::load(&filename.unwrap());
+        if image_res.is_ok() {
+            state.image = image_res.unwrap();
+            unsafe {
+                InvalidateRect(hwnd, null_mut(), 1);
+            }
+        } else {
+            println!("{:?}", image_res.unwrap_err());
+        }
+    }
 }
 
 unsafe fn window_proc(
@@ -60,7 +75,7 @@ unsafe fn window_proc(
     match msg {
         WM_COMMAND => {
             match wparam & 0xffff {
-                FILE_OPEN => file_open(hwnd),
+                FILE_OPEN => file_open(state, hwnd),
                 _ => println!("WM_COMMAND. wparam low word = {}", wparam & 0xffff)
             }
         }
@@ -69,6 +84,11 @@ unsafe fn window_proc(
                 SC_CLOSE => PostQuitMessage(0),
                 _ => {}
             }
+        }
+        WM_PAINT => {
+            let dc = GetDC(hwnd);
+            state.image.paint_to_dc(dc);
+            println!("paint");
         }
         _ => {}
     }

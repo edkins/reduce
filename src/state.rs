@@ -1,7 +1,7 @@
 use crate::image::Image;
 
 pub struct State {
-    image: Image
+    pub image: Image
 }
 
 impl State {
