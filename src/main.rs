@@ -1,4 +1,6 @@
+mod image;
 mod open;
+mod state;
 
 use std::iter::once;
 use std::mem::uninitialized;
@@ -10,12 +12,14 @@ use winapi::um::winuser::{
     CS_OWNDC,CS_HREDRAW,CS_VREDRAW,WNDCLASSW,
     CW_USEDEFAULT,
     MSG,
-    WM_COMMAND,WM_DESTROY,
+    SC_CLOSE,
+    WM_COMMAND,WM_SYSCOMMAND,
     WS_OVERLAPPEDWINDOW,WS_VISIBLE,
     CreateWindowExW,DefWindowProcW,DispatchMessageW,GetMessageW,PostQuitMessage,RegisterClassW,TranslateMessage};
 use winapi::um::libloaderapi::GetModuleHandleW;
 
 use crate::open::show_file_open_dialog;
+use crate::state::State;
 
 pub fn win32_string(value : &str) -> Vec<u16> {
     value.chars().map(|c|c as u16).chain( once( 0 ) ).collect()
@@ -45,26 +49,29 @@ fn file_open(hwnd: HWND) {
     println!("Filename: {:?}", filename);
 }
 
-unsafe extern "system" fn window_proc(
+unsafe fn window_proc(
+    state: &mut State,
     hwnd: HWND, 
     msg: UINT, 
     wparam: WPARAM, 
     lparam: LPARAM
-) -> LRESULT
+)
 {
     match msg {
-        WM_DESTROY => {
-            PostQuitMessage(0);
-        }
         WM_COMMAND => {
             match wparam & 0xffff {
                 FILE_OPEN => file_open(hwnd),
                 _ => println!("WM_COMMAND. wparam low word = {}", wparam & 0xffff)
             }
         }
+        WM_SYSCOMMAND => {
+            match wparam & 0xffff {
+                SC_CLOSE => PostQuitMessage(0),
+                _ => {}
+            }
+        }
         _ => {}
     }
-    DefWindowProcW(hwnd, msg, wparam, lparam)
 }
 
 impl WndClass {
@@ -79,7 +86,7 @@ impl WndClass {
             hinstance = GetModuleHandleW(null_mut());
             let wnd_class = WNDCLASSW {
                 style : CS_OWNDC | CS_HREDRAW | CS_VREDRAW,
-                lpfnWndProc : Some(window_proc),
+                lpfnWndProc : Some(DefWindowProcW),
                 hInstance : hinstance,
                 lpszClassName : name.as_ptr(),
                 cbClsExtra : 0,
@@ -123,12 +130,13 @@ impl Window {
         Window{ hwnd: hwnd }
     }
 
-    fn event_loop(&self) {
+    fn event_loop(&self, state: &mut State) {
         unsafe {
             let mut message:MSG = uninitialized();
             loop {
                 if GetMessageW( &mut message as *mut MSG, self.hwnd, 0, 0 ) > 0 {
                     TranslateMessage( &message as *const MSG );
+                    window_proc( state, message.hwnd, message.message, message.wParam, message.lParam );
                     DispatchMessageW( &message as *const MSG );
                 } else {
                     break;
@@ -141,5 +149,6 @@ impl Window {
 fn main() {
     let class = WndClass::new("reduce","menubar");
     let window = Window::new(&class, "Reduce Images");
-    window.event_loop();
+    let mut state = State::new();
+    window.event_loop(&mut state);
 }
