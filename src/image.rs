@@ -12,13 +12,6 @@ use winapi::ctypes::c_void;
 
 use crate::error::Er;
 
-pub struct Rgba {
-    r: u8,
-    g: u8,
-    b: u8,
-    a: u8
-}
-
 #[derive(Debug)]
 pub struct Image {
     width: u64,
