@@ -1,11 +1,11 @@
 use std::ptr::null_mut;
 
-use winapi::shared::minwindef::{ATOM,HMODULE};
-use winapi::shared::windef::{HWND};
+use winapi::shared::minwindef::DWORD;
+use winapi::shared::windef::HWND;
 use winapi::um::winuser::{
     CS_OWNDC,CS_HREDRAW,CS_VREDRAW,WNDCLASSW,
     CW_USEDEFAULT,
-    WS_OVERLAPPEDWINDOW,WS_VISIBLE,
+    WS_CHILD,WS_OVERLAPPEDWINDOW,WS_VISIBLE,
     CreateWindowExW,DefWindowProcW,
     RegisterClassW,
 };
@@ -13,39 +13,48 @@ use winapi::um::libloaderapi::GetModuleHandleW;
 
 use crate::win32_string;
 
-pub struct WndClass {
-    hinstance: HMODULE,
-    _atom: ATOM,
-    name: Vec<u16>
+pub fn register_class_with_menu(name: &str, menu_name: &str) {
+    let name = win32_string(name);
+    let menu_name = win32_string(menu_name);
+
+    unsafe {
+        let hinstance = GetModuleHandleW(null_mut());
+        let wnd_class = WNDCLASSW {
+            style : CS_OWNDC | CS_HREDRAW | CS_VREDRAW,
+            lpfnWndProc : Some(DefWindowProcW),
+            hInstance : hinstance,
+            lpszClassName : name.as_ptr(),
+            cbClsExtra : 0,
+            cbWndExtra : 0,
+            hIcon: null_mut(),
+            hCursor: null_mut(),
+            hbrBackground: null_mut(),
+            lpszMenuName: menu_name.as_ptr()
+        };
+
+        let _atom = RegisterClassW(&wnd_class);
+    }
 }
 
-impl WndClass {
-    pub fn new(name: &str, menu_name: &str) -> Self {
-        let name = win32_string(name);
-        let menu_name = win32_string(menu_name);
+pub fn register_class(name: &str) {
+    let name = win32_string(name);
 
-        let atom;
-        let hinstance;
+    unsafe {
+        let hinstance = GetModuleHandleW(null_mut());
+        let wnd_class = WNDCLASSW {
+            style : CS_OWNDC | CS_HREDRAW | CS_VREDRAW,
+            lpfnWndProc : Some(DefWindowProcW),
+            hInstance : hinstance,
+            lpszClassName : name.as_ptr(),
+            cbClsExtra : 0,
+            cbWndExtra : 0,
+            hIcon: null_mut(),
+            hCursor: null_mut(),
+            hbrBackground: null_mut(),
+            lpszMenuName: null_mut()
+        };
 
-        unsafe {
-            hinstance = GetModuleHandleW(null_mut());
-            let wnd_class = WNDCLASSW {
-                style : CS_OWNDC | CS_HREDRAW | CS_VREDRAW,
-                lpfnWndProc : Some(DefWindowProcW),
-                hInstance : hinstance,
-                lpszClassName : name.as_ptr(),
-                cbClsExtra : 0,
-                cbWndExtra : 0,
-                hIcon: null_mut(),
-                hCursor: null_mut(),
-                hbrBackground: null_mut(),
-                lpszMenuName: menu_name.as_ptr()
-            };
-
-            atom = RegisterClassW(&wnd_class);
-        }
-
-        WndClass{ _atom: atom, name: name, hinstance: hinstance }
+        let _atom = RegisterClassW(&wnd_class);
     }
 }
 
@@ -54,13 +63,14 @@ pub struct Window {
 }
 
 impl Window {
-    pub fn new(class: &WndClass, title: &str) -> Self {
+    pub fn new(class: &str, title: &str) -> Self {
         let title = win32_string(title);
+        let class = win32_string(class);
         let hwnd;
         unsafe {
             hwnd = CreateWindowExW(
                 0,
-                class.name.as_ptr(),
+                class.as_ptr(),
                 title.as_ptr(),
                 WS_OVERLAPPEDWINDOW | WS_VISIBLE,
                 CW_USEDEFAULT,
@@ -69,10 +79,31 @@ impl Window {
                 CW_USEDEFAULT,
                 null_mut(),
                 null_mut(),
-                class.hinstance,
+                GetModuleHandleW(null_mut()),
                 null_mut() );
         }
-        Window{ hwnd: hwnd }
+        Window{ hwnd }
+    }
+    pub fn new_child(&self, class: &str, title: &str, x: i32, y: i32, width: i32, height: i32, style: DWORD) -> Self {
+        let title = win32_string(title);
+        let class = win32_string(class);
+        let hwnd;
+        unsafe {
+            hwnd = CreateWindowExW(
+                0,
+                class.as_ptr(),
+                title.as_ptr(),
+                WS_CHILD | WS_VISIBLE | style,
+                x,
+                y,
+                width,
+                height,
+                self.hwnd,
+                null_mut(),
+                GetModuleHandleW(null_mut()),
+                null_mut() );
+        }
+        Window{ hwnd }
     }
     pub fn get_hwnd(&self) -> HWND {
         self.hwnd

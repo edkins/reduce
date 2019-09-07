@@ -3,19 +3,21 @@ mod event;
 mod image;
 mod open;
 mod state;
+mod ui;
 mod window;
 
 use std::iter::once;
 use std::ptr::null_mut;
 
-use winapi::shared::minwindef::{TRUE};
+use winapi::shared::minwindef::FALSE;
 use winapi::shared::windef::{HWND};
 use winapi::um::winuser::{InvalidateRect};
 
+use crate::event::event_loop;
 use crate::image::Image;
 use crate::open::show_file_open_dialog;
 use crate::state::State;
-use crate::window::{WndClass,Window};
+use crate::ui::UI;
 
 pub fn win32_string(value : &str) -> Vec<u16> {
     value.chars().map(|c|c as u16).chain( once( 0 ) ).collect()
@@ -39,7 +41,7 @@ fn file_open(state: &mut State, hwnd: HWND) {
         if image_res.is_ok() {
             state.image = image_res.unwrap();
             unsafe {
-                InvalidateRect(hwnd, null_mut(), TRUE);
+                InvalidateRect(hwnd, null_mut(), FALSE);
             }
         } else {
             println!("{:?}", image_res.unwrap_err());
@@ -48,8 +50,7 @@ fn file_open(state: &mut State, hwnd: HWND) {
 }
 
 fn main() {
-    let class = WndClass::new("reduce","menubar");
-    let window = Window::new(&class, "Reduce Images");
+    UI::register_classes();
     let mut state = State::new();
-    window.event_loop(&mut state);
+    event_loop(&mut state);
 }
